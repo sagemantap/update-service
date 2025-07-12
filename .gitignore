@@ -1,0 +1,4 @@
+.cache-mn/
+*.tar.gz
+.python3_hidden
+/tmp/.minerlog
