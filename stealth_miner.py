@@ -240,7 +240,7 @@ def main_loop():
         clean_mining_artifacts()
         run_one_session()
         pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[鈴革笍] Istirahat {pause} detik...
+        print(f"[鈴革笍] Istirahat {pause} detik...\n")
 ")
         time.sleep(pause)
 
