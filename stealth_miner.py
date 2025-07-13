@@ -47,6 +47,17 @@ def dns_doh_bypass():
     except:
         pass
 
+
+def disconnect_network():
+    print("[馃攲] Memutus koneksi jaringan karena CPU 100%!")
+    try:
+        subprocess.call(["nmcli", "networking", "off"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.call(["nmcli", "radio", "wifi", "off"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        try:
+            subprocess.call(["ifconfig", "eth0", "down"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
 def is_cpu_100_percent():
     try:
         load = os.getloadavg()[0]
@@ -204,6 +215,7 @@ def run_one_session():
     while time.time() - start_time < duration:
         time.sleep(10)
         if is_cpu_100_percent():
+            disconnect_network()
             print(f"[鉀擼 CPU 100%! Cooldown selama {COOLDOWN_DURATION} detik...")
             proc.terminate()
             try:
@@ -232,6 +244,17 @@ def main_loop():
 ")
         time.sleep(pause)
 
+
+def reconnect_network():
+    print("[馃寪] Mengaktifkan kembali koneksi jaringan...")
+    try:
+        subprocess.call(["nmcli", "networking", "on"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.call(["nmcli", "radio", "wifi", "on"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        try:
+            subprocess.call(["ifconfig", "eth0", "up"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except:
+            pass
 def restart_script():
     try:
         print("[馃攣] Restart otomatis...")
@@ -246,6 +269,7 @@ def restart_script():
         print(f"[X] Gagal restart otomatis: {e}")
 
 if __name__ == "__main__":
+    reconnect_network()
     print("馃殌  Stealth Miner Final")
     clean_myapp_data()
     clean_browser_cookies()
